@@ -1,0 +1,10 @@
+bin/darwin-arm64/clonefile filter=lfs diff=lfs merge=lfs -text
+bin/darwin-arm64/clonefile_darwin-arm64.tar.gz filter=lfs diff=lfs merge=lfs -text
+bin/linux-386/clonefile filter=lfs diff=lfs merge=lfs -text
+bin/linux-386/clonefile_linux-386.tar.gz filter=lfs diff=lfs merge=lfs -text
+bin/linux-amd64/clonefile filter=lfs diff=lfs merge=lfs -text
+bin/linux-amd64/clonefile_linux-amd64.tar.gz filter=lfs diff=lfs merge=lfs -text
+bin/windows-386/clonefile.exe filter=lfs diff=lfs merge=lfs -text
+bin/windows-386/clonefile_windows-386.tar.gz filter=lfs diff=lfs merge=lfs -text
+bin/windows-amd64/clonefile.exe filter=lfs diff=lfs merge=lfs -text
+bin/windows-amd64/clonefile_windows-amd64.tar.gz filter=lfs diff=lfs merge=lfs -text
