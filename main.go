@@ -19,9 +19,15 @@ const (
 	timeFormat = "2006_01_02_15_04_05"
 )
 
-var src, dst, srcLastDir, exclude, prefix string
-var interval, max int64
-var excludeM map[string]bool
+var (
+	src, dst, srcLastDir, exclude, prefix string
+	interval, max                         int64
+	excludeM                              map[string]bool
+	showVersion                           bool
+	gitHash                               string
+	buildTime                             string
+	goVersion                             string
+)
 
 func init() {
 	flag.StringVar(&src, "s", "./", "src dir")  // /a/b
@@ -30,9 +36,11 @@ func init() {
 	flag.Int64Var(&max, "m", 1000, "max count")
 	flag.StringVar(&prefix, "p", "f93851f4", "prefix")
 	flag.StringVar(&exclude, "e", "clonefile,clonefile.exe", "exclude file, split by ,")
+	flag.BoolVar(&showVersion, "v", false, "version info")
 	flag.Parse()
 }
 func main() {
+	version()
 	checkFlag()
 	initParam()
 	go loopClone()
@@ -40,7 +48,16 @@ func main() {
 	select {}
 }
 
+func version() {
+	if showVersion {
+		fmt.Printf("Git Commit Hash: %s\n", gitHash)
+		fmt.Printf("Build TimeStamp: %s\n", buildTime)
+		fmt.Printf("GoLang Version: %s\n", goVersion)
+		os.Exit(1)
+	}
+}
 func checkFlag() {
+
 	if src == "" || dst == "" || prefix == "" {
 		flag.PrintDefaults()
 		os.Exit(1)
