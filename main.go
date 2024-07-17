@@ -115,13 +115,13 @@ func loopDelete() {
 			}
 			delDirs := (([]string)(dirs))[:m]
 			for _, dd := range delDirs {
-				fmt.Println("Deleting dir:", dd)
+				fmt.Println("Removing dir:", dd)
 				err = os.RemoveAll(dd)
 				if err != nil {
 					fmt.Printf("Remove dir: %v err: %v\n", dd, err)
 					continue
 				}
-				fmt.Printf("Deleting dir: %v success\n", dd)
+				fmt.Printf("Remove dir: %v success\n", dd)
 			}
 		}()
 		<-time.After(time.Duration(1) * time.Second)
