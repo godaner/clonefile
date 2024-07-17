@@ -56,10 +56,15 @@ func main() {
 	go func() {
 		for {
 			go func() {
+				defer func() {
+					if err := recover(); err != nil {
+						fmt.Println("recover clone file err:", err)
+					}
+				}()
 				err = clonefile(sn, dn, sName)
 				if err != nil {
 					fmt.Println(err)
-					os.Exit(1)
+					return
 				}
 			}()
 			<-time.After(time.Duration(interval) * time.Second)
@@ -68,6 +73,11 @@ func main() {
 	go func() {
 		for {
 			go func() {
+				defer func() {
+					if err := recover(); err != nil {
+						fmt.Println("recover delete err:", err)
+					}
+				}()
 				dirs := sort.StringSlice{}
 				filepath.Dir(dst)
 				err = filepath.WalkDir(dst, func(path string, d fs.DirEntry, err error) error {
@@ -86,7 +96,7 @@ func main() {
 				})
 				if err != nil {
 					fmt.Println(err)
-					os.Exit(1)
+					return
 				}
 				dirs.Sort()
 				m := dirs.Len() - int(max)
