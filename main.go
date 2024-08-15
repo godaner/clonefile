@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"github.com/duke-git/lancet/v2/fileutil"
 	"github.com/samber/lo"
+	"github.com/sirupsen/logrus"
 	"io/fs"
 	"io/ioutil"
 	"os"
@@ -33,7 +34,7 @@ func init() {
 	flag.StringVar(&src, "s", "./", "src dir")  // /a/b
 	flag.StringVar(&dst, "d", "../", "dst dir") // /a =>> /a/clonefile_2022_04_15_14_33_32_b
 	flag.Int64Var(&interval, "i", 60, "interval, second")
-	flag.Int64Var(&max, "m", 1000, "max count")
+	flag.Int64Var(&max, "m", 360, "max count")
 	flag.StringVar(&prefix, "p", "f93851f4", "prefix")
 	flag.StringVar(&exclude, "e", "clonefile,clonefile.exe", "exclude file, split by ,")
 	flag.BoolVar(&showVersion, "v", false, "version info")
@@ -43,6 +44,7 @@ func main() {
 	version()
 	checkFlag()
 	initParam()
+	initLog()
 	go loopClone()
 	go loopRemoveDir()
 	select {}
@@ -53,7 +55,7 @@ func version() {
 		fmt.Printf("Git Commit Hash: %s\n", gitHash)
 		fmt.Printf("Build TimeStamp: %s\n", buildTime)
 		fmt.Printf("GoLang Version: %s\n", goVersion)
-		os.Exit(1)
+		os.Exit(0)
 	}
 }
 func checkFlag() {
@@ -64,6 +66,21 @@ func checkFlag() {
 	}
 }
 
+func initLog() {
+	// Log as JSON instead of the default ASCII formatter.
+	logrus.SetFormatter(&logrus.TextFormatter{
+		ForceColors:      true,
+		DisableTimestamp: true,
+	})
+	//logrus.SetReportCaller(true)
+
+	// Output to stdout instead of the default stderr
+	// Can be any io.Writer, see below for File example
+	logrus.SetOutput(os.Stdout)
+
+	// Only log the warning severity or above.
+	logrus.SetLevel(logrus.DebugLevel)
+}
 func initParam() {
 	excludeM = lo.SliceToMap(strings.Split(exclude, ","), func(s string) (string, bool) {
 		return s, true
@@ -71,29 +88,29 @@ func initParam() {
 	var err error
 	src, err = filepath.Abs(src)
 	if err != nil {
-		fmt.Println("[Initing]Get src abs path err:", err)
+		logrus.Error("[Initing]Get src abs path err:", err)
 		os.Exit(1)
 	}
 	// /Users/godaner/gomod/clonefile/bin/darwin-arm64
-	fmt.Println("[Initing]Src abs path:", src)
+	logrus.Info("[Initing]Src abs path:", src)
 	if !fileutil.IsDir(src) {
-		fmt.Println("[Initing]Src abs path is not dir")
+		logrus.Error("[Initing]Src abs path is not dir")
 		os.Exit(1)
 	}
 	// darwin-arm64
 	srcLastDir = filepath.Base(src)
-	fmt.Println("[Initing]Src abs last dir:", srcLastDir)
+	logrus.Info("[Initing]Src abs last dir:", srcLastDir)
 
 	dst, err = filepath.Abs(dst)
 	if err != nil {
-		fmt.Println("[Initing]Get dst abs path err:", err)
+		logrus.Error("[Initing]Get dst abs path err:", err)
 		os.Exit(1)
 	}
 	// /Users/godaner/gomod/clonefile/bin
-	fmt.Println("[Initing]Dst abs path:", dst)
+	logrus.Info("[Initing]Dst abs path:", dst)
 
 	if !fileutil.IsDir(dst) {
-		fmt.Println("[Initing]Dst abs path is not dir")
+		logrus.Error("[Initing]Dst abs path is not dir")
 		os.Exit(1)
 	}
 }
@@ -113,7 +130,7 @@ func loopClone() {
 func removeDir() {
 	defer func() {
 		if err := recover(); err != nil {
-			fmt.Printf("[Removing]Recover remove dir err: %v, %v\n", err, string(debug.Stack()))
+			logrus.Infof("[Removing]Recover remove dir err: %v, %v\n", err, string(debug.Stack()))
 		}
 	}()
 	dirs := sort.StringSlice{}
@@ -133,7 +150,7 @@ func removeDir() {
 		return nil
 	})
 	if err != nil {
-		fmt.Printf("[Removing]Walk remove dir: %v err: %v\n", dst, err)
+		logrus.Errorf("[Removing]Walk remove dir: %v err: %v\n", dst, err)
 		return
 	}
 	dirs.Sort()
@@ -143,25 +160,25 @@ func removeDir() {
 	}
 	delDirs := (([]string)(dirs))[:m]
 	for _, dd := range delDirs {
-		fmt.Println("[Removing]Removing dir:", dd)
+		logrus.Info("[Removing]Removing dir:", dd)
 		err = os.RemoveAll(dd)
 		if err != nil {
-			fmt.Printf("[Removing]Remove dir: %v err: %v\n", dd, err)
+			logrus.Errorf("[Removing]Remove dir: %v err: %v\n", dd, err)
 			continue
 		}
-		fmt.Printf("[Removing]Remove dir: %v success\n", dd)
+		logrus.Infof("[Removing]Remove dir: %v success\n", dd)
 	}
 }
 
 func cloneFile() {
 	defer func() {
 		if err := recover(); err != nil {
-			fmt.Printf("[Cloning]Recover clone file err: %v, %v\n", err, string(debug.Stack()))
+			logrus.Infof("[Cloning]Recover clone file err: %v, %v\n", err, string(debug.Stack()))
 		}
 	}()
-	fmt.Println("[Cloning]...")
+	logrus.Info("[Cloning]...")
 	defer func() {
-		fmt.Println("[Cloning]Finish!")
+		logrus.Info("[Cloning]Finish!")
 	}()
 	ts := time.Now().Format(timeFormat)
 	err := filepath.WalkDir(src, func(path string, d fs.DirEntry, err error) error {
@@ -174,7 +191,7 @@ func cloneFile() {
 			return nil
 		}
 		if excludeM[d.Name()] {
-			fmt.Println("[Cloning]Ignore file:", d.Name())
+			logrus.Warn("[Cloning]Ignore file:", d.Name())
 			return nil
 		}
 		bs, err := ioutil.ReadFile(path)
@@ -182,7 +199,7 @@ func cloneFile() {
 			return err
 		}
 		nName := strings.ReplaceAll(path, src, dst+string(filepath.Separator)+prefix+"_"+ts+"_"+srcLastDir)
-		fmt.Println("[Cloning]Clone", path, "to", nName)
+		logrus.Info("[Cloning]Clone", path, "to", nName)
 		err = ioutil.WriteFile(nName, bs, 0777)
 		if err != nil {
 			return err
@@ -190,6 +207,6 @@ func cloneFile() {
 		return nil
 	})
 	if err != nil {
-		fmt.Printf("[Cloning]Walk clone dir: %v err: %v\n", dst, err)
+		logrus.Error("[Cloning]Walk clone dir: %v err: %v\n", dst, err)
 	}
 }
