@@ -1,15 +1,21 @@
 package main
 
 import (
+	"encoding/json"
 	"flag"
 	"fmt"
 	"github.com/duke-git/lancet/v2/fileutil"
+	"github.com/google/uuid"
 	"github.com/samber/lo"
 	"github.com/sirupsen/logrus"
+	"html/template"
 	"io/fs"
 	"io/ioutil"
 	"os"
+	"os/exec"
+	"path"
 	"path/filepath"
+	"runtime"
 	"runtime/debug"
 	"sort"
 	"strings"
@@ -17,7 +23,9 @@ import (
 )
 
 const (
-	timeFormat = "2006_01_02_15_04_05"
+	timeFormat  = "2006_01_02_15_04_05"
+	timeFormat2 = "2006-01-02 15:04:05"
+	versionFile = ".clonefile_version"
 )
 
 var (
@@ -28,6 +36,11 @@ var (
 	gitHash                               string
 	buildTime                             string
 	goVersion                             string
+	httpServerAddr                        string
+)
+var (
+	templateList *template.Template
+	err          error
 )
 
 func init() {
@@ -38,16 +51,51 @@ func init() {
 	flag.StringVar(&prefix, "p", "f93851f4", "prefix")
 	flag.StringVar(&exclude, "e", "clonefile,clonefile.exe", "exclude file, split by ,")
 	flag.BoolVar(&showVersion, "v", false, "version info")
+	flag.StringVar(&httpServerAddr, "h", "127.0.0.1:31555", "http server address")
 	flag.Parse()
 }
 func main() {
 	version()
+	initLog()
 	checkFlag()
 	initParam()
-	initLog()
+	initTemplate()
+	openBrowser()
+	go httpServer()
 	go loopClone()
 	go loopRemoveDir()
 	select {}
+}
+
+func initTemplate() {
+	templateList, err = template.New("").Funcs(template.FuncMap{
+		"Style": Style,
+		"UUID": func() string {
+			return uuid.NewString()
+		},
+	}).Parse(templateListHtml)
+	if err != nil {
+		logrus.Fatalf("[InitTemplate]Parse list template html err: %v", err)
+	}
+}
+
+var commands = map[string]string{
+	"windows": "start",
+	"darwin":  "open",
+	"linux":   "xdg-open",
+}
+
+func openBrowser() {
+	run, ok := commands[runtime.GOOS]
+	if !ok {
+		logrus.Errorf("[OpenBrowser]Don't know how to open things on %s platform", runtime.GOOS)
+	}
+
+	cmd := exec.Command(run, "http://"+httpServerAddr+"/list")
+	err := cmd.Start()
+	if err != nil {
+		logrus.Errorf("[OpenBrowser]Open browser err: %v", err)
+	}
 }
 
 func version() {
@@ -88,14 +136,12 @@ func initParam() {
 	var err error
 	src, err = filepath.Abs(src)
 	if err != nil {
-		logrus.Error("[Initing]Get src abs path err:", err)
-		os.Exit(1)
+		logrus.Fatal("[Initing]Get src abs path err:", err)
 	}
 	// /Users/godaner/gomod/clonefile/bin/darwin-arm64
 	logrus.Info("[Initing]Src abs path:", src)
 	if !fileutil.IsDir(src) {
-		logrus.Error("[Initing]Src abs path is not dir")
-		os.Exit(1)
+		logrus.Fatal("[Initing]Src abs path is not dir")
 	}
 	// darwin-arm64
 	srcLastDir = filepath.Base(src)
@@ -103,15 +149,13 @@ func initParam() {
 
 	dst, err = filepath.Abs(dst)
 	if err != nil {
-		logrus.Error("[Initing]Get dst abs path err:", err)
-		os.Exit(1)
+		logrus.Fatal("[Initing]Get dst abs path err:", err)
 	}
 	// /Users/godaner/gomod/clonefile/bin
 	logrus.Info("[Initing]Dst abs path:", dst)
 
 	if !fileutil.IsDir(dst) {
-		logrus.Error("[Initing]Dst abs path is not dir")
-		os.Exit(1)
+		logrus.Fatal("[Initing]Dst abs path is not dir")
 	}
 }
 
@@ -130,7 +174,7 @@ func loopClone() {
 func removeDir() {
 	defer func() {
 		if err := recover(); err != nil {
-			logrus.Infof("[Removing]Recover remove dir err: %v, %v\n", err, string(debug.Stack()))
+			logrus.Infof("[Removing]Recover remove dir err: %v, %v", err, string(debug.Stack()))
 		}
 	}()
 	dirs := sort.StringSlice{}
@@ -150,7 +194,7 @@ func removeDir() {
 		return nil
 	})
 	if err != nil {
-		logrus.Errorf("[Removing]Walk remove dir: %v err: %v\n", dst, err)
+		logrus.Errorf("[Removing]Walk remove dir: %v err: %v", dst, err)
 		return
 	}
 	dirs.Sort()
@@ -163,27 +207,28 @@ func removeDir() {
 		logrus.Info("[Removing]Removing dir:", dd)
 		err = os.RemoveAll(dd)
 		if err != nil {
-			logrus.Errorf("[Removing]Remove dir: %v err: %v\n", dd, err)
+			logrus.Errorf("[Removing]Remove dir: %v err: %v", dd, err)
 			continue
 		}
-		logrus.Infof("[Removing]Remove dir: %v success\n", dd)
+		logrus.Infof("[Removing]Remove dir: %v success", dd)
 	}
 }
 
 func cloneFile() {
 	defer func() {
 		if err := recover(); err != nil {
-			logrus.Infof("[Cloning]Recover clone file err: %v, %v\n", err, string(debug.Stack()))
+			logrus.Infof("[Cloning]Recover clone file err: %v, %v", err, string(debug.Stack()))
 		}
 	}()
 	logrus.Info("[Cloning]...")
 	defer func() {
 		logrus.Info("[Cloning]Finish!")
 	}()
-	ts := time.Now().Format(timeFormat)
-	err := filepath.WalkDir(src, func(path string, d fs.DirEntry, err error) error {
+	now := time.Now()
+	ts := now.Format(timeFormat)
+	err := filepath.WalkDir(src, func(p string, d fs.DirEntry, err error) error {
 		if d.IsDir() {
-			nName := strings.ReplaceAll(path, src, dst+string(filepath.Separator)+prefix+"_"+ts+"_"+srcLastDir)
+			nName := strings.ReplaceAll(p, src, path.Join(dst, prefix+"_"+ts+"_"+srcLastDir))
 			err = os.Mkdir(nName, 0777)
 			if err != nil {
 				return err
@@ -191,15 +236,15 @@ func cloneFile() {
 			return nil
 		}
 		if excludeM[d.Name()] {
-			logrus.Warn("[Cloning]Ignore file:", d.Name())
+			logrus.Warn("[Cloning]Ignore clone file:", d.Name())
 			return nil
 		}
-		bs, err := ioutil.ReadFile(path)
+		bs, err := ioutil.ReadFile(p)
 		if err != nil {
 			return err
 		}
-		nName := strings.ReplaceAll(path, src, dst+string(filepath.Separator)+prefix+"_"+ts+"_"+srcLastDir)
-		logrus.Info("[Cloning]Clone", path, "to", nName)
+		nName := strings.ReplaceAll(p, src, path.Join(dst, prefix+"_"+ts+"_"+srcLastDir))
+		logrus.Info("[Cloning]Clone", p, "to", nName)
 		err = ioutil.WriteFile(nName, bs, 0777)
 		if err != nil {
 			return err
@@ -207,6 +252,15 @@ func cloneFile() {
 		return nil
 	})
 	if err != nil {
-		logrus.Error("[Cloning]Walk clone dir: %v err: %v\n", dst, err)
+		logrus.Error("[Cloning]Walk clone dir: %v err: %v", dst, err)
+	} else {
+		versionJson, _ := json.Marshal(map[string]any{
+			"version": now.Format(timeFormat2),
+		})
+		versionFile := path.Join(dst, prefix+"_"+ts+"_"+srcLastDir, versionFile)
+		err = ioutil.WriteFile(versionFile, versionJson, 0777)
+		if err != nil {
+			logrus.Error("[Cloning]Write config json: %v err: %v", versionFile, err)
+		}
 	}
 }
