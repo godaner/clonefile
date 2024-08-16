@@ -20,102 +20,106 @@ import (
 	"time"
 )
 
-func httpServer() {
-	http.HandleFunc("/list", func(w http.ResponseWriter, r *http.Request) {
-		err = renderList(w)
+func backupList(w http.ResponseWriter, r *http.Request) {
+	err = renderBackupList(w)
+	if err != nil {
+		_, _ = w.Write([]byte(err.Error()))
+		return
+	}
+}
+func backupDelete(w http.ResponseWriter, r *http.Request) {
+	var err error
+	defer func() {
+		errMsg := "Success"
 		if err != nil {
-			_, _ = w.Write([]byte(err.Error()))
-			return
+			errMsg = err.Error()
 		}
-	})
-	http.HandleFunc("/delete/", func(w http.ResponseWriter, r *http.Request) {
-		var err error
-		defer func() {
-			errMsg := "Success"
-			if err != nil {
-				errMsg = err.Error()
-			}
-			http.Redirect(w, r, "/list?errMsg="+errMsg, http.StatusMovedPermanently)
-		}()
-		version := strings.TrimPrefix(r.URL.Path, "/delete/")
-		t, err := time.Parse(timeFormat2, version)
+		http.Redirect(w, r, "/bk_list?errMsg="+errMsg, http.StatusMovedPermanently)
+	}()
+	version := strings.TrimPrefix(r.URL.Path, "/bk_delete/")
+	t, err := time.Parse(timeFormat2, version)
+	if err != nil {
+		err = fmt.Errorf("[BackupDelete]Parse version: %v to format: %v err: %v", version, timeFormat2, err)
+		return
+	}
+	err = os.RemoveAll(path.Join(dst, prefix+"_"+t.Format(timeFormat)+"_"+srcLastDir))
+	if err != nil {
+		return
+	}
+}
+func backupUse(w http.ResponseWriter, r *http.Request) {
+	var err error
+	defer func() {
+		errMsg := "Success"
 		if err != nil {
-			err = fmt.Errorf("[DeleteIt]Parse version: %v to format: %v err: %v", version, timeFormat2, err)
-			return
+			errMsg = err.Error()
 		}
-		err = os.RemoveAll(path.Join(dst, prefix+"_"+t.Format(timeFormat)+"_"+srcLastDir))
-		if err != nil {
-			return
-		}
-	})
-	http.HandleFunc("/use/", func(w http.ResponseWriter, r *http.Request) {
-		var err error
-		defer func() {
-			errMsg := "Success"
-			if err != nil {
-				errMsg = err.Error()
-			}
-			http.Redirect(w, r, "/list?errMsg="+errMsg, http.StatusMovedPermanently)
-		}()
-		version := strings.TrimPrefix(r.URL.Path, "/use/")
-		t, err := time.Parse(timeFormat2, version)
-		if err != nil {
-			err = fmt.Errorf("[UseIt]Parse version: %v to format: %v err: %v", version, timeFormat2, err)
-			return
-		}
+		http.Redirect(w, r, "/bk_list?errMsg="+errMsg, http.StatusMovedPermanently)
+	}()
+	version := strings.TrimPrefix(r.URL.Path, "/bk_use/")
+	t, err := time.Parse(timeFormat2, version)
+	if err != nil {
+		err = fmt.Errorf("[BackupUse]Parse version: %v to format: %v err: %v", version, timeFormat2, err)
+		return
+	}
 
-		// remove file
-		err = filepath.WalkDir(src, func(p string, d fs.DirEntry, err error) error {
-			if p == src {
-				return nil
-			}
-			if excludeM[d.Name()] {
-				logrus.Warn("[UseIt]Ignore remove file:", d.Name())
-				return nil
-			}
-			if d.IsDir() {
-				return os.RemoveAll(p)
-			}
-			return fileutil.RemoveFile(p)
-		})
-		if err != nil {
-			return
+	// remove file
+	err = filepath.WalkDir(src, func(p string, d fs.DirEntry, err error) error {
+		if p == src {
+			return nil
 		}
+		if excludeM[d.Name()] {
+			logrus.Warn("[BackupUse]Ignore remove file:", d.Name())
+			return nil
+		}
+		if d.IsDir() {
+			return os.RemoveAll(p)
+		}
+		return fileutil.RemoveFile(p)
+	})
+	if err != nil {
+		return
+	}
 
-		// copy
-		err = filepath.WalkDir(path.Join(dst, prefix+"_"+t.Format(timeFormat)+"_"+srcLastDir), func(p string, d fs.DirEntry, err error) error {
-			if d.IsDir() {
-				nName := strings.ReplaceAll(p, prefix+"_"+t.Format(timeFormat)+"_"+srcLastDir, srcLastDir)
-				err = os.MkdirAll(nName, 0777)
-				if err != nil {
-					return err
-				}
-				return nil
-			}
-			if excludeM[d.Name()] {
-				logrus.Warn("[UseIt]Ignore clone file:", d.Name())
-				return nil
-			}
-			bs, err := ioutil.ReadFile(p)
-			if err != nil {
-				return err
-			}
+	// copy
+	err = filepath.WalkDir(path.Join(dst, prefix+"_"+t.Format(timeFormat)+"_"+srcLastDir), func(p string, d fs.DirEntry, err error) error {
+		if d.IsDir() {
 			nName := strings.ReplaceAll(p, prefix+"_"+t.Format(timeFormat)+"_"+srcLastDir, srcLastDir)
-			logrus.Info("[UseIt]Clone", p, "to", nName)
-			err = ioutil.WriteFile(nName, bs, 0777)
+			err = os.MkdirAll(nName, 0777)
 			if err != nil {
 				return err
 			}
 			return nil
-		})
-		if err != nil {
-			return
 		}
+		if excludeM[d.Name()] {
+			logrus.Warn("[BackupUse]Ignore clone file:", d.Name())
+			return nil
+		}
+		bs, err := ioutil.ReadFile(p)
+		if err != nil {
+			return err
+		}
+		nName := strings.ReplaceAll(p, prefix+"_"+t.Format(timeFormat)+"_"+srcLastDir, srcLastDir)
+		logrus.Info("[BackupUse]Clone", p, "to", nName)
+		err = ioutil.WriteFile(nName, bs, 0777)
+		if err != nil {
+			return err
+		}
+		return nil
 	})
+	if err != nil {
+		return
+	}
+}
+func httpServer() {
+	http.HandleFunc("/", backupList)
+	http.HandleFunc("/bk_list", backupList)
+	http.HandleFunc("/bk_delete/", backupDelete)
+	http.HandleFunc("/bk_use/", backupUse)
 	logrus.Fatal(http.ListenAndServe(httpServerAddr, nil))
 }
 
-func renderList(w io.Writer) error {
+func renderBackupList(w io.Writer) error {
 	dirs := make([]string, 0)
 	err := filepath.WalkDir(dst, func(path string, d fs.DirEntry, err error) error {
 		if d.IsDir() && strings.HasPrefix(d.Name(), prefix) {
@@ -124,7 +128,7 @@ func renderList(w io.Writer) error {
 		return nil
 	})
 	if err != nil {
-		logrus.Error("[HttpServer]Walk dst dir: %v err: %v", dst, err)
+		logrus.Error("[RenderBackupList]Walk dst dir: %v err: %v", dst, err)
 	}
 	rows := lo.Map(dirs, func(item string, index int) []string {
 		ts := item[:strings.LastIndex(item, "_")]
@@ -139,7 +143,7 @@ func renderList(w io.Writer) error {
 	bs, _ := ioutil.ReadFile(path.Join(src, versionFile))
 	_ = json.Unmarshal(bs, &versionJson)
 	ver := cast.ToString(versionJson["version"])
-	err = templateList.Execute(w, map[string]interface{}{
+	err = templateBackupList.Execute(w, map[string]interface{}{
 		"Title":       fmt.Sprintf("Clone file: %v to %v", src, path.Join(dst, prefix+"_*_"+srcLastDir)),
 		"Version":     lo.Ternary(ver == "", "-", ver),
 		"TotalCnt":    len(dirs),
@@ -148,11 +152,12 @@ func renderList(w io.Writer) error {
 		"Rows":        rows,
 	})
 	if err != nil {
-		logrus.Error("[RenderList]Exec list template err: %v", err)
+		logrus.Error("[RenderBackupList]Exec backup list template err: %v", err)
 		return err
 	}
 	return nil
 }
+
 func Style(version string, row []string) template.CSS {
 	if row[1] == version {
 		return "background: darkgreen;color: white;"

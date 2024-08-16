@@ -39,8 +39,8 @@ var (
 	httpServerAddr                        string
 )
 var (
-	templateList *template.Template
-	err          error
+	templateBackupList *template.Template
+	err                error
 )
 
 func init() {
@@ -68,14 +68,14 @@ func main() {
 }
 
 func initTemplate() {
-	templateList, err = template.New("").Funcs(template.FuncMap{
+	templateBackupList, err = template.New("").Funcs(template.FuncMap{
 		"Style": Style,
 		"UUID": func() string {
 			return uuid.NewString()
 		},
-	}).Parse(templateListHtml)
+	}).Parse(templateBackupListHtml)
 	if err != nil {
-		logrus.Fatalf("[InitTemplate]Parse list template html err: %v", err)
+		logrus.Fatalf("[InitTemplate]Parse backup list template html err: %v", err)
 	}
 }
 
@@ -91,7 +91,7 @@ func openBrowser() {
 		logrus.Errorf("[OpenBrowser]Don't know how to open things on %s platform", runtime.GOOS)
 	}
 
-	cmd := exec.Command(run, "http://"+httpServerAddr+"/list")
+	cmd := exec.Command(run, "http://"+httpServerAddr)
 	err := cmd.Start()
 	if err != nil {
 		logrus.Errorf("[OpenBrowser]Open browser err: %v", err)

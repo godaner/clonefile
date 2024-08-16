@@ -1,6 +1,6 @@
 package main
 
-var templateListHtml = `<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+var templateBackupListHtml = `<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
 <html xmlns="http://www.w3.org/1999/xhtml">
 <head>
 	<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
@@ -89,8 +89,8 @@ var templateListHtml = `<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitiona
 			{{- range $Row }}
 			<td>{{.}}</td>
 			{{- end}}
-			<td><a style="{{ Style $.Version $Row }}" href="/use/{{ index $Row 1 }}?{{UUID}}">Use it</a></td>
-			<td><a style="{{ Style $.Version $Row }}" href="/delete/{{ index $Row 1 }}?{{UUID}}">Delete it</a></td>
+			<td><a style="{{ Style $.Version $Row }}" href="/bk_use/{{ index $Row 1 }}?{{UUID}}">Use it</a></td>
+			<td><a style="{{ Style $.Version $Row }}" href="/bk_delete/{{ index $Row 1 }}?{{UUID}}">Delete it</a></td>
 		  </tr>
 		  {{ end }}
 		</table>
@@ -125,7 +125,4 @@ var templateListHtml = `<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitiona
     </script>
 </body>
 </html>
-
-
-
 `
