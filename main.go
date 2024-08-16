@@ -139,20 +139,20 @@ func initParam() {
 		logrus.Fatal("[Initing]Get src abs path err:", err)
 	}
 	// /Users/godaner/gomod/clonefile/bin/darwin-arm64
-	logrus.Info("[Initing]Src abs path:", src)
+	logrus.Infoln("[Initing]Src abs path:", src)
 	if !fileutil.IsDir(src) {
 		logrus.Fatal("[Initing]Src abs path is not dir")
 	}
 	// darwin-arm64
 	srcLastDir = filepath.Base(src)
-	logrus.Info("[Initing]Src abs last dir:", srcLastDir)
+	logrus.Infoln("[Initing]Src abs last dir:", srcLastDir)
 
 	dst, err = filepath.Abs(dst)
 	if err != nil {
 		logrus.Fatal("[Initing]Get dst abs path err:", err)
 	}
 	// /Users/godaner/gomod/clonefile/bin
-	logrus.Info("[Initing]Dst abs path:", dst)
+	logrus.Infoln("[Initing]Dst abs path:", dst)
 
 	if !fileutil.IsDir(dst) {
 		logrus.Fatal("[Initing]Dst abs path is not dir")
@@ -204,7 +204,7 @@ func removeDir() {
 	}
 	delDirs := (([]string)(dirs))[:m]
 	for _, dd := range delDirs {
-		logrus.Info("[Removing]Removing dir:", dd)
+		logrus.Infoln("[Removing]Removing dir:", dd)
 		err = os.RemoveAll(dd)
 		if err != nil {
 			logrus.Errorf("[Removing]Remove dir: %v err: %v", dd, err)
@@ -220,9 +220,9 @@ func cloneFile() {
 			logrus.Infof("[Cloning]Recover clone file err: %v, %v", err, string(debug.Stack()))
 		}
 	}()
-	logrus.Info("[Cloning]...")
+	logrus.Infoln("[Cloning]...")
 	defer func() {
-		logrus.Info("[Cloning]Finish!")
+		logrus.Infoln("[Cloning]Finish!")
 	}()
 	now := time.Now()
 	ts := now.Format(timeFormat)
@@ -236,7 +236,7 @@ func cloneFile() {
 			return nil
 		}
 		if excludeM[d.Name()] {
-			logrus.Warn("[Cloning]Ignore clone file:", d.Name())
+			logrus.Warnln("[Cloning]Ignore clone file:", d.Name())
 			return nil
 		}
 		bs, err := ioutil.ReadFile(p)
@@ -244,7 +244,7 @@ func cloneFile() {
 			return err
 		}
 		nName := strings.ReplaceAll(p, src, path.Join(dst, prefix+"_"+ts+"_"+srcLastDir))
-		logrus.Info("[Cloning]Clone", p, "to", nName)
+		logrus.Infoln("[Cloning]Clone", p, "to", nName)
 		err = ioutil.WriteFile(nName, bs, 0777)
 		if err != nil {
 			return err
@@ -252,7 +252,7 @@ func cloneFile() {
 		return nil
 	})
 	if err != nil {
-		logrus.Error("[Cloning]Walk clone dir: %v err: %v", dst, err)
+		logrus.Errorln("[Cloning]Walk clone dir: %v err: %v", dst, err)
 	} else {
 		versionJson, _ := json.Marshal(map[string]any{
 			"version": now.Format(timeFormat2),
@@ -260,7 +260,7 @@ func cloneFile() {
 		versionFile := path.Join(dst, prefix+"_"+ts+"_"+srcLastDir, versionFile)
 		err = ioutil.WriteFile(versionFile, versionJson, 0777)
 		if err != nil {
-			logrus.Error("[Cloning]Write config json: %v err: %v", versionFile, err)
+			logrus.Errorln("[Cloning]Write config json: %v err: %v", versionFile, err)
 		}
 	}
 }

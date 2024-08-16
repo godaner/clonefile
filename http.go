@@ -69,7 +69,7 @@ func backupUse(w http.ResponseWriter, r *http.Request) {
 			return nil
 		}
 		if excludeM[d.Name()] {
-			logrus.Warn("[BackupUse]Ignore remove file:", d.Name())
+			logrus.Warnln("[BackupUse]Ignore remove file:", d.Name())
 			return nil
 		}
 		if d.IsDir() {
@@ -92,7 +92,7 @@ func backupUse(w http.ResponseWriter, r *http.Request) {
 			return nil
 		}
 		if excludeM[d.Name()] {
-			logrus.Warn("[BackupUse]Ignore clone file:", d.Name())
+			logrus.Warnln("[BackupUse]Ignore clone file:", d.Name())
 			return nil
 		}
 		bs, err := ioutil.ReadFile(p)
@@ -100,7 +100,7 @@ func backupUse(w http.ResponseWriter, r *http.Request) {
 			return err
 		}
 		nName := strings.ReplaceAll(p, prefix+"_"+t.Format(timeFormat)+"_"+srcLastDir, srcLastDir)
-		logrus.Info("[BackupUse]Clone", p, "to", nName)
+		logrus.Infoln("[BackupUse]Clone", p, "to", nName)
 		err = ioutil.WriteFile(nName, bs, 0777)
 		if err != nil {
 			return err
@@ -128,7 +128,7 @@ func renderBackupList(w io.Writer) error {
 		return nil
 	})
 	if err != nil {
-		logrus.Error("[RenderBackupList]Walk dst dir: %v err: %v", dst, err)
+		logrus.Errorf("[RenderBackupList]Walk dst dir: %v err: %v", dst, err)
 	}
 	rows := lo.Map(dirs, func(item string, index int) []string {
 		ts := item[:strings.LastIndex(item, "_")]
@@ -152,7 +152,7 @@ func renderBackupList(w io.Writer) error {
 		"Rows":        rows,
 	})
 	if err != nil {
-		logrus.Error("[RenderBackupList]Exec backup list template err: %v", err)
+		logrus.Errorf("[RenderBackupList]Exec backup list template err: %v", err)
 		return err
 	}
 	return nil
