@@ -81,7 +81,7 @@ var templateBackupListHtml = `<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Trans
             Prefix:<input type="text" name='p' placeholder="Prefix" required value="{{.Conf.Prefix}}">
             Exclude:<input type="text" name='e' placeholder="Exclude file, split by ," required value="{{.Conf.Exclude}}">
             Refresh:<input type="number" name='r' placeholder="Refresh time, second" required value="{{.Conf.Refresh}}">
-            <button type="submit">Submit</button>
+            <button type="submit">Save</button>
             <button style="{{StateStyle .NextState}}" type="button" id="start-btn">{{.NextState}}</button>
             <button type="button" id="refresh-btn">Refresh</button>
             <button type="button" id="clone-btn">Clone</button>

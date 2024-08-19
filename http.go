@@ -363,7 +363,7 @@ func renderBackupList(w io.Writer) error {
 	dirs := make([]string, 0)
 	err = filepath.WalkDir(conf.DstAbs, func(path string, d fs.DirEntry, err error) error {
 		if d.IsDir() &&
-			strings.HasPrefix(d.Name(), conf.Prefix) &&
+			strings.HasPrefix(d.Name(), conf.Prefix+"_") &&
 			strings.HasSuffix(d.Name(), "_"+conf.SrcLastDir) {
 			dirs = append(dirs, d.Name())
 		}
