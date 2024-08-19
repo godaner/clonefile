@@ -59,20 +59,21 @@ func initTemplate() {
 	}
 }
 
-var commands = map[string]string{
-	"windows": "start",
-	"darwin":  "open",
-	"linux":   "xdg-open",
-}
-
 func openBrowser() {
-	run, ok := commands[runtime.GOOS]
-	if !ok {
-		logrus.Errorf("[OpenBrowser]Don't know how to open things on %s platform", runtime.GOOS)
+	var cmd string
+	var args []string
+	url := "http://" + httpServerAddr
+	switch runtime.GOOS {
+	case "windows":
+		cmd = "cmd"
+		args = []string{"/c", "start"}
+	case "darwin":
+		cmd = "open"
+	default: // "linux", "freebsd", "openbsd", "netbsd"
+		cmd = "xdg-open"
 	}
-
-	cmd := exec.Command(run, "http://"+httpServerAddr)
-	err := cmd.Start()
+	args = append(args, url)
+	err = exec.Command(cmd, args...).Start()
 	if err != nil {
 		logrus.Errorf("[OpenBrowser]Open browser err: %v", err)
 	}

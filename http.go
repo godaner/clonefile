@@ -161,19 +161,6 @@ func browserFile(w http.ResponseWriter, r *http.Request) {
 		}
 		http.Redirect(w, r, "/bk_list?errMsg="+errMsg, http.StatusMovedPermanently)
 	}()
-	// 获取当前系统类型
-	var openCmd string
-	switch runtime.GOOS {
-	case "windows":
-		openCmd = "explorer.exe"
-	case "darwin":
-		openCmd = "open"
-	case "linux":
-		openCmd = "xdg-open"
-	default:
-		err = errors.New("unsupported platform")
-		return
-	}
 
 	version := strings.TrimPrefix(r.URL.Path, "/browser_file/")
 	t, err := time.Parse(timeFormat2, version)
@@ -182,8 +169,26 @@ func browserFile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	// 打开文件浏览器
-	err = exec.Command(openCmd, path.Join(conf.Dst, conf.Prefix+"_"+t.Format(timeFormat)+"_"+conf.SrcLastDir)).Start()
-	if err != nil {
+	dirPath := path.Join(conf.DstAbs, conf.Prefix+"_"+t.Format(timeFormat)+"_"+conf.SrcLastDir)
+	logrus.Infoln("[BrowserFile]Open dir:", dirPath)
+	switch runtime.GOOS {
+	case "windows":
+		err := exec.Command("explorer.exe", dirPath).Start()
+		if err != nil {
+			return
+		}
+	case "darwin":
+		_, err = os.StartProcess("/usr/bin/open", []string{"open", dirPath}, &os.ProcAttr{})
+		if err != nil {
+			return
+		}
+	case "linux":
+		_, err = os.StartProcess("xdg-open", []string{"xdg-open", dirPath}, &os.ProcAttr{})
+		if err != nil {
+			return
+		}
+	default:
+		err = errors.New("unSupport os")
 		return
 	}
 }
