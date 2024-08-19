@@ -7,7 +7,7 @@ var templateBackupListHtml = `<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Trans
 	<meta http-equiv="Pragma" content="no-cache">
 	<meta http-equiv="Expires" content="0">
 	<meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
-	<meta http-equiv="refresh" content="5">
+	//<meta http-equiv="refresh" content="60">
 	<title>{{.Title}}</title>
 	<style>
         body {
@@ -63,7 +63,7 @@ var templateBackupListHtml = `<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Trans
 		}
 	
 		.content {
-		  	margin-top: 80px;
+		  	margin-top: 130px;
 		}
 	</style>
 </head>
@@ -71,7 +71,18 @@ var templateBackupListHtml = `<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Trans
 <body onload="restoreScrollPosition()">
 	
 	<div class="header-div">
+		<p>{{.SfVersion}}</p>
 		<p>{{.Title}}, Total: {{.TotalCnt}}, Version: {{.Version}},RefreshTime: {{.RefreshTime}}</p>
+		<form action="/cf_set?uuid={{UUID}}" method="post">
+			<input type="text" name='s' placeholder="Src dir" required value="{{.Conf.S}}">
+			<input type="text" name='d' placeholder="Dst dir" required value="{{.Conf.D}}">
+			<input type="number" name='i' placeholder="Interval" required value="{{.Conf.I}}">
+			<input type="number" name='m' placeholder="Max count" required value="{{.Conf.M}}">
+			<input type="text" name='p' placeholder="Prefix" required value="{{.Conf.P}}">
+			<input type="text" name='e' placeholder="Exclude file, split by ," required value="{{.Conf.E}}">
+			<button type="submit">Submit</button>
+			<button style="{{StateStyle .State}}" type="button" id="start-btn">{{.State}}</button>
+		</form>
 		<p id="msg"></p>
 	  </div>
 	
@@ -90,7 +101,7 @@ var templateBackupListHtml = `<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Trans
 			<td>{{.}}</td>
 			{{- end}}
 			<td><a style="{{ Style $.Version $Row }}" href="/bk_use/{{ index $Row 1 }}?{{UUID}}">Use it</a></td>
-			<td><a style="{{ Style $.Version $Row }}" href="/bk_delete/{{ index $Row 1 }}?{{UUID}}">Delete it</a></td>
+			<td><a style="{{ Style $.Version $Row }}" href="/bk_delete/{{ index $Row 1 }}?uuid={{UUID}}">Delete it</a></td>
 		  </tr>
 		  {{ end }}
 		</table>
@@ -121,6 +132,25 @@ var templateBackupListHtml = `<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Trans
 		}
 		addEventListener("wheel", (event) => {
 			saveScrollPosition()
+		});
+
+
+		// 获取 "Start" 按钮元素
+		const startBtn = document.getElementById('start-btn');
+	
+		// 为按钮添加点击事件监听器
+		startBtn.addEventListener('click', function() {
+			// 执行您的自定义操作
+			// 例如,跳转到另一个页面
+			// 获取按钮的文本内容
+			const buttonText = this.textContent;
+	
+			// 根据按钮的文本内容做不同的操作
+			if (buttonText === 'Start') {
+				window.location.href = '/start?{{UUID}}';
+			} else if (buttonText === 'Stop') {
+				window.location.href = '/stop?{{UUID}}';
+			}
 		});
     </script>
 </body>

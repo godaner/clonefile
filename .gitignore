@@ -15,3 +15,4 @@ exe
 # vendor/
 bin/
 .clonefile_version
+.clonefile_config
