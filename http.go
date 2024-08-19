@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/duke-git/lancet/v2/fileutil"
+	"github.com/duke-git/lancet/v2/formatter"
 	"github.com/samber/lo"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cast"
@@ -15,8 +16,10 @@ import (
 	"io/ioutil"
 	"net/http"
 	"os"
+	"os/exec"
 	"path"
 	"path/filepath"
+	"runtime"
 	"runtime/debug"
 	"sort"
 	"strings"
@@ -25,6 +28,7 @@ import (
 
 const (
 	configFileName = ".clonefile_config"
+	minRefresh     = 60
 )
 
 var conf *config
@@ -66,7 +70,7 @@ func backupDelete(w http.ResponseWriter, r *http.Request) {
 		err = fmt.Errorf("[BackupDelete]Parse version: %v to format: %v err: %v", version, timeFormat2, err)
 		return
 	}
-	err = os.RemoveAll(path.Join(conf.Dst, conf.P+"_"+t.Format(timeFormat)+"_"+conf.SrcLastDir))
+	err = os.RemoveAll(path.Join(conf.DstAbs, conf.Prefix+"_"+t.Format(timeFormat)+"_"+conf.SrcLastDir))
 	if err != nil {
 		return
 	}
@@ -88,8 +92,8 @@ func backupUse(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// remove file
-	err = filepath.WalkDir(conf.Src, func(p string, d fs.DirEntry, err error) error {
-		if p == conf.Src {
+	err = filepath.WalkDir(conf.SrcAbs, func(p string, d fs.DirEntry, err error) error {
+		if p == conf.SrcAbs {
 			return nil
 		}
 		if conf.ExcludeM[d.Name()] {
@@ -106,9 +110,9 @@ func backupUse(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// copy
-	err = filepath.WalkDir(path.Join(conf.Dst, conf.P+"_"+t.Format(timeFormat)+"_"+conf.SrcLastDir), func(p string, d fs.DirEntry, err error) error {
+	err = filepath.WalkDir(path.Join(conf.DstAbs, conf.Prefix+"_"+t.Format(timeFormat)+"_"+conf.SrcLastDir), func(p string, d fs.DirEntry, err error) error {
 		if d.IsDir() {
-			nName := strings.ReplaceAll(p, conf.P+"_"+t.Format(timeFormat)+"_"+conf.SrcLastDir, conf.SrcLastDir)
+			nName := strings.ReplaceAll(p, conf.Prefix+"_"+t.Format(timeFormat)+"_"+conf.SrcLastDir, conf.SrcLastDir)
 			err = os.MkdirAll(nName, 0777)
 			if err != nil {
 				return err
@@ -123,7 +127,7 @@ func backupUse(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			return err
 		}
-		nName := strings.ReplaceAll(p, conf.P+"_"+t.Format(timeFormat)+"_"+conf.SrcLastDir, conf.SrcLastDir)
+		nName := strings.ReplaceAll(p, conf.Prefix+"_"+t.Format(timeFormat)+"_"+conf.SrcLastDir, conf.SrcLastDir)
 		logrus.Infoln("[BackupUse]Clone", p, "to", nName)
 		err = ioutil.WriteFile(nName, bs, 0777)
 		if err != nil {
@@ -140,12 +144,61 @@ func httpServer() {
 	http.HandleFunc("/cf_set", setConfig)
 	http.HandleFunc("/start", start)
 	http.HandleFunc("/stop", stop)
+	http.HandleFunc("/clone", clone)
 	http.HandleFunc("/bk_list", backupList)
 	http.HandleFunc("/bk_delete/", backupDelete)
 	http.HandleFunc("/bk_use/", backupUse)
+	http.HandleFunc("/browser_file/", browserFile)
 	logrus.Fatal(http.ListenAndServe(httpServerAddr, nil))
 }
 
+func browserFile(w http.ResponseWriter, r *http.Request) {
+	var err error
+	defer func() {
+		errMsg := "Success"
+		if err != nil {
+			errMsg = err.Error()
+		}
+		http.Redirect(w, r, "/bk_list?errMsg="+errMsg, http.StatusMovedPermanently)
+	}()
+	// 获取当前系统类型
+	var openCmd string
+	switch runtime.GOOS {
+	case "windows":
+		openCmd = "explorer.exe"
+	case "darwin":
+		openCmd = "open"
+	case "linux":
+		openCmd = "xdg-open"
+	default:
+		err = errors.New("unsupported platform")
+		return
+	}
+
+	version := strings.TrimPrefix(r.URL.Path, "/browser_file/")
+	t, err := time.Parse(timeFormat2, version)
+	if err != nil {
+		err = fmt.Errorf("[BrowserFile]Parse version: %v to format: %v err: %v", version, timeFormat2, err)
+		return
+	}
+	// 打开文件浏览器
+	err = exec.Command(openCmd, path.Join(conf.Dst, conf.Prefix+"_"+t.Format(timeFormat)+"_"+conf.SrcLastDir)).Start()
+	if err != nil {
+		return
+	}
+}
+
+func clone(w http.ResponseWriter, r *http.Request) {
+	var err error
+	defer func() {
+		errMsg := "Success"
+		if err != nil {
+			errMsg = err.Error()
+		}
+		http.Redirect(w, r, "/bk_list?errMsg="+errMsg, http.StatusMovedPermanently)
+	}()
+	cloneFile()
+}
 func stop(w http.ResponseWriter, r *http.Request) {
 	var err error
 	defer func() {
@@ -185,14 +238,15 @@ func start(w http.ResponseWriter, r *http.Request) {
 }
 
 type config struct {
-	S          string          `json:"s"`
-	D          string          `json:"d"`
-	I          int64           `json:"i"`
-	M          int64           `json:"m"`
-	P          string          `json:"p"`
-	E          string          `json:"e"`
-	Src        string          `json:"-"`
-	Dst        string          `json:"-"`
+	Src        string          `json:"src"`
+	Dst        string          `json:"dst"`
+	Interval   int64           `json:"interval"`
+	MaxCount   int64           `json:"max_count"`
+	Prefix     string          `json:"prefix"`
+	Exclude    string          `json:"exclude"`
+	Refresh    int64           `json:"refresh"` // web刷新时间
+	SrcAbs     string          `json:"-"`
+	DstAbs     string          `json:"-"`
 	SrcLastDir string          `json:"-"`
 	ExcludeM   map[string]bool `json:"-"`
 }
@@ -209,13 +263,15 @@ func (c *config) save() error {
 func (c *config) load() error {
 	if !fileutil.IsExist(configFileName) {
 		*c = config{
-			S: "./",
-			D: "../",
-			I: 60,
-			M: 360,
-			P: "f93851f4",
-			E: "clonefile,clonefile.exe",
+			Src:      "./",
+			Dst:      "../",
+			Interval: 60,
+			MaxCount: 360,
+			Prefix:   "f93851f4",
+			Exclude:  "clonefile,clonefile.exe," + configFileName,
+			Refresh:  minRefresh,
 		}
+		_ = c.save()
 		return nil
 	}
 	bs, err := ioutil.ReadFile(configFileName)
@@ -229,26 +285,29 @@ func (c *config) load() error {
 	return nil
 }
 func (c *config) validate() error {
-	c.ExcludeM = lo.SliceToMap(strings.Split(c.E, ","), func(s string) (string, bool) {
+	c.ExcludeM = lo.SliceToMap(strings.Split(c.Exclude, ","), func(s string) (string, bool) {
 		return s, true
 	})
-	c.Src, err = filepath.Abs(c.S)
+	c.SrcAbs, err = filepath.Abs(c.Src)
 	if err != nil {
 		return fmt.Errorf("get src abs path err: %v", err)
 	}
 	// /Users/godaner/gomod/clonefile/bin/darwin-arm64
-	if !fileutil.IsDir(c.Src) {
+	if !fileutil.IsDir(c.SrcAbs) {
 		return errors.New("src abs path is not dir")
 	}
 	// darwin-arm64
-	c.SrcLastDir = filepath.Base(c.Src)
-	c.Dst, err = filepath.Abs(c.D)
+	c.SrcLastDir = filepath.Base(c.SrcAbs)
+	c.DstAbs, err = filepath.Abs(c.Dst)
 	if err != nil {
 		return fmt.Errorf("get dst abs path err: %v", err)
 	}
 	// /Users/godaner/gomod/clonefile/bin
-	if !fileutil.IsDir(c.D) {
+	if !fileutil.IsDir(c.DstAbs) {
 		return errors.New("dst abs path is not dir")
+	}
+	if c.Refresh < minRefresh {
+		return fmt.Errorf("refresh must>=%v", minRefresh)
 	}
 	return nil
 }
@@ -268,15 +327,17 @@ func setConfig(w http.ResponseWriter, r *http.Request) {
 	d := r.Form.Get("d")
 	i := cast.ToInt64(r.Form.Get("i"))
 	m := cast.ToInt64(r.Form.Get("m"))
+	re := cast.ToInt64(r.Form.Get("r"))
 	p := r.Form.Get("p")
 	e := r.Form.Get("e")
 	nc := &config{
-		S: s,
-		D: d,
-		I: i,
-		M: m,
-		P: p,
-		E: e,
+		Src:      s,
+		Dst:      d,
+		Interval: i,
+		MaxCount: m,
+		Prefix:   p,
+		Exclude:  e,
+		Refresh:  re,
 	}
 	err = nc.validate()
 	if err != nil {
@@ -300,28 +361,29 @@ func setConfig(w http.ResponseWriter, r *http.Request) {
 
 func renderBackupList(w io.Writer) error {
 	dirs := make([]string, 0)
-	err = filepath.WalkDir(conf.Dst, func(path string, d fs.DirEntry, err error) error {
+	err = filepath.WalkDir(conf.DstAbs, func(path string, d fs.DirEntry, err error) error {
 		if d.IsDir() &&
-			strings.HasPrefix(d.Name(), conf.P) &&
+			strings.HasPrefix(d.Name(), conf.Prefix) &&
 			strings.HasSuffix(d.Name(), "_"+conf.SrcLastDir) {
 			dirs = append(dirs, d.Name())
 		}
 		return nil
 	})
 	if err != nil {
-		logrus.Errorf("[RenderBackupList]Walk dst dir: %v err: %v", conf.Dst, err)
+		logrus.Errorf("[RenderBackupList]Walk dst dir: %v err: %v", conf.DstAbs, err)
 	}
 	rows := lo.Map(dirs, func(item string, index int) []string {
 		ts := item[:strings.LastIndex(item, "_")]
 		ts = ts[strings.Index(ts, "_")+1:]
 		t, _ := time.Parse(`2006_01_02_15_04_05`, ts)
-		return []string{item, t.Format(timeFormat2)}
+		fileCount, dirSize := countFilesAndSize(path.Join(conf.DstAbs, item))
+		return []string{item, t.Format(timeFormat2), cast.ToString(fileCount), formatter.BinaryBytes(float64(dirSize))}
 	})
 	slices.SortFunc(rows, func(a, b []string) bool {
 		return a[1] > b[1]
 	})
 	versionJson := map[string]any{}
-	bs, _ := ioutil.ReadFile(path.Join(conf.Src, versionFile))
+	bs, _ := ioutil.ReadFile(path.Join(conf.SrcAbs, versionFile))
 	_ = json.Unmarshal(bs, &versionJson)
 	ver := cast.ToString(versionJson["version"])
 	nexState := "Stop"
@@ -331,16 +393,25 @@ func renderBackupList(w io.Writer) error {
 	default:
 
 	}
+	nextBackupIn := int64(0)
+	if nexState == "Stop" {
+		if lastBackupTime.IsZero() {
+			nextBackupIn = conf.Interval
+		} else {
+			nextBackupIn = int64(lastBackupTime.Add(time.Duration(conf.Interval)*time.Second).Sub(time.Now()).Seconds()) + 1
+		}
+	}
+
 	err = templateBackupList.Execute(w, map[string]interface{}{
-		"Title":       fmt.Sprintf("Clone file: %v to %v", conf.Src, path.Join(conf.Dst, conf.P+"_*_"+conf.SrcLastDir)),
-		"SfVersion":   versionString(),
-		"Version":     lo.Ternary(ver == "", "-", ver),
-		"TotalCnt":    len(dirs),
-		"State":       nexState,
-		"Conf":        conf,
-		"RefreshTime": time.Now().Format(timeFormat2),
-		"Header":      []string{"File", "Time"},
-		"Rows":        rows,
+		"Title":        fmt.Sprintf("Clone file: %v to %v", conf.SrcAbs, path.Join(conf.DstAbs, conf.Prefix+"_*_"+conf.SrcLastDir)),
+		"SfVersion":    versionString(),
+		"Version":      lo.Ternary(ver == "", "-", ver),
+		"TotalCnt":     len(dirs),
+		"NextBackupIn": nextBackupIn,
+		"NextState":    nexState,
+		"Conf":         conf,
+		"Header":       []string{"Dir", "Time", "FileCount", "DirSize"},
+		"Rows":         rows,
 	})
 	if err != nil {
 		logrus.Errorf("[RenderBackupList]Exec backup list template err: %v", err)
@@ -380,7 +451,7 @@ func loopClone() {
 			return
 		default:
 			cloneFile()
-			<-time.After(time.Duration(conf.I) * time.Second)
+			<-time.After(time.Duration(conf.Interval) * time.Second)
 		}
 
 	}
@@ -392,26 +463,26 @@ func removeDir() {
 		}
 	}()
 	dirs := sort.StringSlice{}
-	err := filepath.WalkDir(conf.Dst, func(path string, d fs.DirEntry, err error) error {
-		if !strings.Contains(path, conf.P) {
+	err := filepath.WalkDir(conf.DstAbs, func(path string, d fs.DirEntry, err error) error {
+		if !strings.Contains(path, conf.Prefix) {
 			return nil
 		}
 		ps := strings.Split(path, string(filepath.Separator))
 		if len(ps) <= 0 {
 			return nil
 		}
-		if !strings.Contains(ps[len(ps)-1], conf.P) {
+		if !strings.Contains(ps[len(ps)-1], conf.Prefix) {
 			return nil
 		}
 		dirs = append(dirs, path)
 		return nil
 	})
 	if err != nil {
-		logrus.Errorf("[Removing]Walk remove dir: %v err: %v", conf.Dst, err)
+		logrus.Errorf("[Removing]Walk remove dir: %v err: %v", conf.DstAbs, err)
 		return
 	}
 	dirs.Sort()
-	m := dirs.Len() - int(conf.M)
+	m := dirs.Len() - int(conf.MaxCount)
 	if m <= 0 {
 		return
 	}
@@ -427,11 +498,16 @@ func removeDir() {
 	}
 }
 
+var lastBackupTime time.Time
+
 func cloneFile() {
 	defer func() {
 		if err := recover(); err != nil {
 			logrus.Infof("[Cloning]Recover clone file err: %v, %v", err, string(debug.Stack()))
 		}
+	}()
+	defer func() {
+		lastBackupTime = time.Now()
 	}()
 	logrus.Infoln("[Cloning]...")
 	defer func() {
@@ -439,9 +515,9 @@ func cloneFile() {
 	}()
 	now := time.Now()
 	ts := now.Format(timeFormat)
-	err := filepath.WalkDir(conf.Src, func(p string, d fs.DirEntry, err error) error {
+	err := filepath.WalkDir(conf.SrcAbs, func(p string, d fs.DirEntry, err error) error {
 		if d.IsDir() {
-			nName := strings.ReplaceAll(p, conf.Src, path.Join(conf.Dst, conf.P+"_"+ts+"_"+conf.SrcLastDir))
+			nName := strings.ReplaceAll(p, conf.SrcAbs, path.Join(conf.DstAbs, conf.Prefix+"_"+ts+"_"+conf.SrcLastDir))
 			err = os.Mkdir(nName, 0777)
 			if err != nil {
 				return err
@@ -456,7 +532,7 @@ func cloneFile() {
 		if err != nil {
 			return err
 		}
-		nName := strings.ReplaceAll(p, conf.Src, path.Join(conf.Dst, conf.P+"_"+ts+"_"+conf.SrcLastDir))
+		nName := strings.ReplaceAll(p, conf.SrcAbs, path.Join(conf.DstAbs, conf.Prefix+"_"+ts+"_"+conf.SrcLastDir))
 		logrus.Infoln("[Cloning]Clone", p, "to", nName)
 		err = ioutil.WriteFile(nName, bs, 0777)
 		if err != nil {
@@ -465,15 +541,40 @@ func cloneFile() {
 		return nil
 	})
 	if err != nil {
-		logrus.Errorln("[Cloning]Walk clone dir: %v err: %v", conf.Dst, err)
+		logrus.Errorln("[Cloning]Walk clone dir: %v err: %v", conf.DstAbs, err)
 	} else {
 		versionJson, _ := json.Marshal(map[string]any{
 			"version": now.Format(timeFormat2),
 		})
-		versionFile := path.Join(conf.Dst, conf.P+"_"+ts+"_"+conf.SrcLastDir, versionFile)
+		versionFile := path.Join(conf.DstAbs, conf.Prefix+"_"+ts+"_"+conf.SrcLastDir, versionFile)
 		err = ioutil.WriteFile(versionFile, versionJson, 0777)
 		if err != nil {
 			logrus.Errorln("[Cloning]Write config json: %v err: %v", versionFile, err)
 		}
 	}
+}
+
+func countFilesAndSize(dirPath string) (int, int64) {
+	var fileCount int
+	var totalSize int64
+
+	err := filepath.Walk(dirPath, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+
+		if !info.IsDir() {
+			fileCount++
+			totalSize += info.Size()
+		}
+
+		return nil
+	})
+
+	if err != nil {
+		logrus.Errorln("Error:", err)
+		return 0, 0
+	}
+
+	return fileCount, totalSize
 }
