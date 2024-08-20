@@ -173,7 +173,8 @@ func browserFile(w http.ResponseWriter, r *http.Request) {
 	logrus.Infoln("[BrowserFile]Open dir:", dirPath)
 	switch runtime.GOOS {
 	case "windows":
-		err := exec.Command("explorer.exe", dirPath).Start()
+		err = exec.Command(`cmd`, `/c`, `explorer`, dirPath).Start()
+		//err := exec.Command("explorer.exe", dirPath).Start()
 		if err != nil {
 			return
 		}
