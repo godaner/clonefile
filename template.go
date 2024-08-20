@@ -62,13 +62,37 @@ var templateBackupListHtml = `<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Trans
         }
     
         .content {
-              margin-top: 188px;
+			margin-top: 188px;
         }
+		.popup {
+		  display: none;
+		  position: fixed;
+		  z-index: 2000;
+		  left: 0;
+		  top: 0;
+		  width: 100%;
+		  height: 100%;
+		  overflow: auto;
+		  background-color: rgba(0, 0, 0, 0.4);
+		}
+	
+		.popup-content {
+		  background-color: #fefefe;
+		  margin: 15% auto;
+		  padding: 20px;
+		  border: 1px solid #888;
+		  width: 30%;
+		}
     </style>
 </head>
  
 <body onload="restoreScrollPosition()">
-    
+	<div id="myPopup" class="popup">
+		<div class="popup-content">
+		  <h2>Waiting...</h2>
+		  <p>Please wait while we process your request.</p>
+		</div>
+	</div>
     <div class="header-div">
         <p>{{.SfVersion}}</p>
         <p>{{.Title}}, Total: {{.TotalCnt}}, Used version: {{.Version}}</p>
@@ -83,10 +107,10 @@ var templateBackupListHtml = `<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Trans
             MaxCount:<input type="number" name='m' placeholder="Max count" required value="{{.Conf.MaxCount}}">
             Prefix:<input type="text" name='p' placeholder="Prefix" required value="{{.Conf.Prefix}}">
             Exclude:<input type="text" name='e' placeholder="Exclude file, split by ," required value="{{.Conf.Exclude}}">
-            <button type="submit">Save</button>
-            <button style="{{StateStyle .NextState}}" type="button" id="start-btn">{{.NextState}}</button>
-            <button type="button" id="refresh-btn">Refresh</button>
-            <button type="button" id="clone-btn">Clone</button>
+            <button type="submit" class="popup-trigger">Save</button>
+            <button style="{{StateStyle .NextState}}" type="button" id="start-btn" class="popup-trigger">{{.NextState}}</button>
+            <button type="button" class="popup-trigger" data-href="/bk_list?{{UUID}}">Refresh</button>
+            <button type="button" class="popup-trigger" data-href="/clone?{{UUID}}">Clone</button>
         </form>
         <p id="msg"></p>
       </div>
@@ -106,8 +130,8 @@ var templateBackupListHtml = `<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Trans
             {{- range $Row }}
             <td>{{.}}</td>
             {{- end}}
-            <td><a style="{{ Style $.Version $Row }}" href="/bk_use/{{ index $Row 1 }}?{{UUID}}">Use it</a></td>
-            <td><a style="{{ Style $.Version $Row }}" href="/bk_delete/{{ index $Row 1 }}?uuid={{UUID}}">Delete it</a></td>
+            <td><a style="{{ Style $.Version $Row }}" class="popup-trigger" href="#" data-href="/bk_use/{{ index $Row 1 }}?{{UUID}}">Use it</a></td>
+            <td><a style="{{ Style $.Version $Row }}" class="popup-trigger" href="#" data-href="/bk_delete/{{ index $Row 1 }}?uuid={{UUID}}">Delete it</a></td>
             <td><a style="{{ Style $.Version $Row }}" href="/browser_file/{{ index $Row 1 }}?uuid={{UUID}}">Browser it</a></td>
           </tr>
           {{ end }}
@@ -153,16 +177,6 @@ var templateBackupListHtml = `<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Trans
             }
         });
 
-        const refreshBtn = document.getElementById('refresh-btn');
-        refreshBtn.addEventListener('click', function() {
-            window.location.href = '/bk_list?{{UUID}}';
-        });
-
-		const cloneBtn = document.getElementById('clone-btn');
-        cloneBtn.addEventListener('click', function() {
-            window.location.href = '/clone?{{UUID}}';
-        });
-
 
         function updateCountdown() {
             let nextRefreshInSeconds = {{.Conf.Interval}};
@@ -182,7 +196,33 @@ var templateBackupListHtml = `<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Trans
 		if ({{.NextState}} === "Stop"){
 			updateCountdown();
 		}
-        
+		const popupTriggers = document.querySelectorAll('.popup-trigger');
+		const popupClose = document.getElementById('popup-close');
+		const popup = document.getElementById('myPopup');
+	
+		popupTriggers.forEach(trigger => {
+		  trigger.addEventListener('click', (event) => {
+			//event.preventDefault();
+			const href = event.target.getAttribute('data-href');
+			if (href) {
+			  // Simulate a delayed action
+			  //setTimeout(() => {
+				window.location.href = href;
+			  //}, 2000);
+			}
+			popup.style.display = 'block';
+		  });
+		});
+	
+		popupClose.addEventListener('click', () => {
+		  popup.style.display = 'none';
+		});
+	
+		window.addEventListener('click', (event) => {
+		  if (event.target == popup) {
+			popup.style.display = 'none';
+		  }
+		});
     </script>
 </body>
 </html>
