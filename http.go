@@ -28,7 +28,6 @@ import (
 
 const (
 	configFileName = ".clonefile_config"
-	minRefresh     = 60
 )
 
 var conf *config
@@ -173,7 +172,8 @@ func browserFile(w http.ResponseWriter, r *http.Request) {
 	logrus.Infoln("[BrowserFile]Open dir:", dirPath)
 	switch runtime.GOOS {
 	case "windows":
-		err = exec.Command(`cmd`, `/c`, `explorer`, dirPath).Start()
+		err = exec.Command("cmd", "/c", "start", dirPath).Run()
+		//err = exec.Command(`cmd`, `/c`, `explorer`, dirPath).Start()
 		//err := exec.Command("explorer.exe", dirPath).Start()
 		if err != nil {
 			return
@@ -250,7 +250,6 @@ type config struct {
 	MaxCount   int64           `json:"max_count"`
 	Prefix     string          `json:"prefix"`
 	Exclude    string          `json:"exclude"`
-	Refresh    int64           `json:"refresh"` // web刷新时间
 	SrcAbs     string          `json:"-"`
 	DstAbs     string          `json:"-"`
 	SrcLastDir string          `json:"-"`
@@ -271,11 +270,10 @@ func (c *config) load() error {
 		*c = config{
 			Src:      "./",
 			Dst:      "../",
-			Interval: 60,
+			Interval: 300,
 			MaxCount: 360,
 			Prefix:   "f93851f4",
 			Exclude:  "clonefile,clonefile.exe," + configFileName,
-			Refresh:  minRefresh,
 		}
 		_ = c.save()
 		return nil
@@ -312,9 +310,6 @@ func (c *config) validate() error {
 	if !fileutil.IsDir(c.DstAbs) {
 		return errors.New("dst abs path is not dir")
 	}
-	if c.Refresh < minRefresh {
-		return fmt.Errorf("refresh must>=%v", minRefresh)
-	}
 	return nil
 }
 func setConfig(w http.ResponseWriter, r *http.Request) {
@@ -333,7 +328,6 @@ func setConfig(w http.ResponseWriter, r *http.Request) {
 	d := r.Form.Get("d")
 	i := cast.ToInt64(r.Form.Get("i"))
 	m := cast.ToInt64(r.Form.Get("m"))
-	re := cast.ToInt64(r.Form.Get("r"))
 	p := r.Form.Get("p")
 	e := r.Form.Get("e")
 	nc := &config{
@@ -343,7 +337,6 @@ func setConfig(w http.ResponseWriter, r *http.Request) {
 		MaxCount: m,
 		Prefix:   p,
 		Exclude:  e,
-		Refresh:  re,
 	}
 	err = nc.validate()
 	if err != nil {
@@ -399,25 +392,16 @@ func renderBackupList(w io.Writer) error {
 	default:
 
 	}
-	nextBackupIn := int64(0)
-	if nexState == "Stop" {
-		if lastBackupTime.IsZero() {
-			nextBackupIn = conf.Interval
-		} else {
-			nextBackupIn = int64(lastBackupTime.Add(time.Duration(conf.Interval)*time.Second).Sub(time.Now()).Seconds()) + 1
-		}
-	}
 
 	err = templateBackupList.Execute(w, map[string]interface{}{
-		"Title":        fmt.Sprintf("Clone file: %v to %v", conf.SrcAbs, path.Join(conf.DstAbs, conf.Prefix+"_*_"+conf.SrcLastDir)),
-		"SfVersion":    versionString(),
-		"Version":      lo.Ternary(ver == "", "-", ver),
-		"TotalCnt":     len(dirs),
-		"NextBackupIn": nextBackupIn,
-		"NextState":    nexState,
-		"Conf":         conf,
-		"Header":       []string{"Dir", "Time", "FileCount", "DirSize"},
-		"Rows":         rows,
+		"Title":     fmt.Sprintf("Clone file: %v to %v", conf.SrcAbs, path.Join(conf.DstAbs, conf.Prefix+"_*_"+conf.SrcLastDir)),
+		"SfVersion": versionString(),
+		"Version":   lo.Ternary(ver == "", "-", ver),
+		"TotalCnt":  len(dirs),
+		"NextState": nexState,
+		"Conf":      conf,
+		"Header":    []string{"Dir", "Time", "FileCount", "DirSize"},
+		"Rows":      rows,
 	})
 	if err != nil {
 		logrus.Errorf("[RenderBackupList]Exec backup list template err: %v", err)
@@ -504,16 +488,11 @@ func removeDir() {
 	}
 }
 
-var lastBackupTime time.Time
-
 func cloneFile() {
 	defer func() {
 		if err := recover(); err != nil {
 			logrus.Infof("[Cloning]Recover clone file err: %v, %v", err, string(debug.Stack()))
 		}
-	}()
-	defer func() {
-		lastBackupTime = time.Now()
 	}()
 	logrus.Infoln("[Cloning]...")
 	defer func() {

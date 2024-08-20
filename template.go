@@ -72,7 +72,10 @@ var templateBackupListHtml = `<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Trans
     <div class="header-div">
         <p>{{.SfVersion}}</p>
         <p>{{.Title}}, Total: {{.TotalCnt}}, Used version: {{.Version}}</p>
-        <p id='next_refresh_in'>NextRefreshIn: {{.Conf.Refresh}}, NextBackupIn: {{.NextBackupIn}}</p>
+		{{ if eq .NextState "Stop" }}
+        	<p id='next_refresh_in'>Next refresh in: {{.Conf.Interval}}</p>
+		{{end}}
+		&#10;
         <form action="/cf_set?uuid={{UUID}}" method="post">
             Src:<input type="text" name='s' placeholder="Src dir" required value="{{.Conf.Src}}">
             Dst:<input type="text" name='d' placeholder="Dst dir" required value="{{.Conf.Dst}}">
@@ -80,7 +83,6 @@ var templateBackupListHtml = `<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Trans
             MaxCount:<input type="number" name='m' placeholder="Max count" required value="{{.Conf.MaxCount}}">
             Prefix:<input type="text" name='p' placeholder="Prefix" required value="{{.Conf.Prefix}}">
             Exclude:<input type="text" name='e' placeholder="Exclude file, split by ," required value="{{.Conf.Exclude}}">
-            Refresh:<input type="number" name='r' placeholder="Refresh time, second" required value="{{.Conf.Refresh}}">
             <button type="submit">Save</button>
             <button style="{{StateStyle .NextState}}" type="button" id="start-btn">{{.NextState}}</button>
             <button type="button" id="refresh-btn">Refresh</button>
@@ -163,26 +165,24 @@ var templateBackupListHtml = `<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Trans
 
 
         function updateCountdown() {
-            let nextRefreshInSeconds = {{.Conf.Refresh}};
-            let nextBackupInSeconds = {{.NextBackupIn}};
+            let nextRefreshInSeconds = {{.Conf.Interval}};
             const countdownDisplay = document.getElementById('next_refresh_in');
             const countdownInterval = setInterval(() => {
 				if (nextRefreshInSeconds>0){
 					nextRefreshInSeconds--;
 				}
-				if (nextBackupInSeconds>0){
-					nextBackupInSeconds--;
-				}
-                if (nextRefreshInSeconds === 0 || (nextBackupInSeconds  === 0 && {{.NextBackupIn}}!==0)) {
+                if (nextRefreshInSeconds === 0) {
                     clearInterval(countdownInterval);
 					window.location.href = '/bk_list?{{UUID}}';
 					return
                 }
-                countdownDisplay.textContent = "NextRefreshIn: "+nextRefreshInSeconds+", NextBackupIn: "+nextBackupInSeconds;
+                countdownDisplay.textContent = "Next refresh in: "+nextRefreshInSeconds
             }, 1000);
 		}
-
-        updateCountdown();
+		if ({{.NextState}} === "Stop"){
+			updateCountdown();
+		}
+        
     </script>
 </body>
 </html>
