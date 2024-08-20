@@ -92,9 +92,9 @@ func backupUse(w http.ResponseWriter, r *http.Request) {
 
 	// remove file
 	err = filepath.WalkDir(conf.SrcAbs, func(p string, d fs.DirEntry, err error) error {
-		if err != nil {
-			return err
-		}
+		//if err != nil {
+		//	return err
+		//}
 		if d == nil {
 			return nil
 		}
@@ -117,9 +117,9 @@ func backupUse(w http.ResponseWriter, r *http.Request) {
 	// copy
 	err = filepath.WalkDir(path.Join(conf.DstAbs, conf.Prefix+"_"+t.Format(timeFormat)+"_"+conf.SrcLastDir), func(p string, d fs.DirEntry, err error) error {
 
-		if err != nil {
-			return err
-		}
+		//if err != nil {
+		//	return err
+		//}
 		if d == nil {
 			return nil
 		}
@@ -283,7 +283,7 @@ func (c *config) load() error {
 		*c = config{
 			Src:      "./",
 			Dst:      "../",
-			Interval: 300,
+			Interval: 60,
 			MaxCount: 360,
 			Prefix:   "f93851f4",
 			Exclude:  "clonefile,clonefile.exe," + configFileName,
@@ -375,9 +375,9 @@ func renderBackupList(w io.Writer) error {
 	dirs := make([]string, 0)
 	err = filepath.WalkDir(conf.DstAbs, func(path string, d fs.DirEntry, err error) error {
 
-		if err != nil {
-			return err
-		}
+		//if err != nil {
+		//	return err
+		//}
 		if d == nil {
 			return nil
 		}
@@ -522,9 +522,9 @@ func cloneFile() {
 	ts := now.Format(timeFormat)
 	err := filepath.WalkDir(conf.SrcAbs, func(p string, d fs.DirEntry, err error) error {
 
-		if err != nil {
-			return err
-		}
+		//if err != nil {
+		//	return err
+		//}
 		if d == nil {
 			return nil
 		}
@@ -571,9 +571,9 @@ func countFilesAndSize(dirPath string) (int, int64) {
 	var totalSize int64
 
 	err := filepath.Walk(dirPath, func(path string, info os.FileInfo, err error) error {
-		if err != nil {
-			return err
-		}
+		//if err != nil {
+		//	return err
+		//}
 		if info == nil {
 			return nil
 		}

@@ -132,7 +132,7 @@ var templateBackupListHtml = `<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Trans
             {{- end}}
             <td><a style="{{ Style $.Version $Row }}" class="popup-trigger" href="#" data-href="/bk_use/{{ index $Row 1 }}?{{UUID}}">Use it</a></td>
             <td><a style="{{ Style $.Version $Row }}" class="popup-trigger" href="#" data-href="/bk_delete/{{ index $Row 1 }}?uuid={{UUID}}">Delete it</a></td>
-            <td><a style="{{ Style $.Version $Row }}" href="/browser_file/{{ index $Row 1 }}?uuid={{UUID}}">Browser it</a></td>
+            <td><a style="{{ Style $.Version $Row }}" class="popup-trigger" href="#" data-href="/browser_file/{{ index $Row 1 }}?uuid={{UUID}}">Browser it</a></td>
           </tr>
           {{ end }}
         </table>
