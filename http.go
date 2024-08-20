@@ -92,6 +92,12 @@ func backupUse(w http.ResponseWriter, r *http.Request) {
 
 	// remove file
 	err = filepath.WalkDir(conf.SrcAbs, func(p string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if d == nil {
+			return nil
+		}
 		if p == conf.SrcAbs {
 			return nil
 		}
@@ -110,6 +116,13 @@ func backupUse(w http.ResponseWriter, r *http.Request) {
 
 	// copy
 	err = filepath.WalkDir(path.Join(conf.DstAbs, conf.Prefix+"_"+t.Format(timeFormat)+"_"+conf.SrcLastDir), func(p string, d fs.DirEntry, err error) error {
+
+		if err != nil {
+			return err
+		}
+		if d == nil {
+			return nil
+		}
 		if d.IsDir() {
 			nName := strings.ReplaceAll(p, conf.Prefix+"_"+t.Format(timeFormat)+"_"+conf.SrcLastDir, conf.SrcLastDir)
 			err = os.MkdirAll(nName, 0777)
@@ -361,6 +374,13 @@ func setConfig(w http.ResponseWriter, r *http.Request) {
 func renderBackupList(w io.Writer) error {
 	dirs := make([]string, 0)
 	err = filepath.WalkDir(conf.DstAbs, func(path string, d fs.DirEntry, err error) error {
+
+		if err != nil {
+			return err
+		}
+		if d == nil {
+			return nil
+		}
 		if d.IsDir() &&
 			strings.HasPrefix(d.Name(), conf.Prefix+"_") &&
 			strings.HasSuffix(d.Name(), "_"+conf.SrcLastDir) {
@@ -501,6 +521,13 @@ func cloneFile() {
 	now := time.Now()
 	ts := now.Format(timeFormat)
 	err := filepath.WalkDir(conf.SrcAbs, func(p string, d fs.DirEntry, err error) error {
+
+		if err != nil {
+			return err
+		}
+		if d == nil {
+			return nil
+		}
 		if d.IsDir() {
 			nName := strings.ReplaceAll(p, conf.SrcAbs, path.Join(conf.DstAbs, conf.Prefix+"_"+ts+"_"+conf.SrcLastDir))
 			err = os.Mkdir(nName, 0777)
@@ -547,7 +574,9 @@ func countFilesAndSize(dirPath string) (int, int64) {
 		if err != nil {
 			return err
 		}
-
+		if info == nil {
+			return nil
+		}
 		if !info.IsDir() {
 			fileCount++
 			totalSize += info.Size()
